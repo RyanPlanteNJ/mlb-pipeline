@@ -1163,23 +1163,52 @@ async def props_cmd(interaction):
             game_date = r["game_date"]
             pred = r.get("predicted_winner", home)
 
+            home_rec = r.get("home_recommendation", "N/A")
+            away_rec = r.get("away_recommendation", "N/A")
+            home_ev = r.get("home_ev")
+            away_ev = r.get("away_ev")
+            home_edge = r.get("home_edge")
+            away_edge = r.get("away_edge")
+            home_kelly = r.get("home_kelly")
+            away_kelly = r.get("away_kelly")
+
             color = team_color(pred)
             logo = team_logo(pred)
 
+            desc_lines = [
+                f"**Home Team Total Runs Line:** {h_line}",
+                f"**Away Team Total Runs Line:** {a_line}",
+                f"**Game Total Runs Line:** {g_line}",
+                f"**Home Moneyline:** {h_ml}",
+                f"**Away Moneyline:** {a_ml}",
+                f"**Home Win Prob:** {fmt_prob(h_wp)}",
+                f"**Away Win Prob:** {fmt_prob(a_wp)}",
+                f"**Home Confidence:** {h_conf}",
+                f"**Away Confidence:** {a_conf}",
+            ]
+
+            if home_rec != "N/A":
+                desc_lines.append(f"**Home Recommendation:** {home_rec}")
+            if away_rec != "N/A":
+                desc_lines.append(f"**Away Recommendation:** {away_rec}")
+            if home_ev is not None:
+                desc_lines.append(f"**Home EV:** ${home_ev:.2f}")
+            if away_ev is not None:
+                desc_lines.append(f"**Away EV:** ${away_ev:.2f}")
+            if home_edge is not None:
+                desc_lines.append(f"**Home Edge:** {home_edge*100:+.1f}%")
+            if away_edge is not None:
+                desc_lines.append(f"**Away Edge:** {away_edge*100:+.1f}%")
+            if home_kelly is not None and home_kelly > 0:
+                desc_lines.append(f"**Home Kelly:** {home_kelly*100:.1f}%")
+            if away_kelly is not None and away_kelly > 0:
+                desc_lines.append(f"**Away Kelly:** {away_kelly*100:.1f}%")
+
+            desc_lines.append(f"**Predicted Winner:** {pred}")
+
             embed = discord.Embed(
                 title=f"{away} @ {home}",
-                description=(
-                    f"**Home Team Total Runs Line:** {h_line}\n"
-                    f"**Away Team Total Runs Line:** {a_line}\n"
-                    f"**Game Total Runs Line:** {g_line}\n"
-                    f"**Home Moneyline:** {h_ml}\n"
-                    f"**Away Moneyline:** {a_ml}\n"
-                    f"**Home Win Prob:** {fmt_prob(h_wp)}\n"
-                    f"**Away Win Prob:** {fmt_prob(a_wp)}\n"
-                    f"**Home Confidence:** {h_conf}\n"
-                    f"**Away Confidence:** {a_conf}\n"
-                    f"**Predicted Winner:** {pred}"
-                ),
+                description="\n".join(desc_lines),
                 color=color,
             )
 
