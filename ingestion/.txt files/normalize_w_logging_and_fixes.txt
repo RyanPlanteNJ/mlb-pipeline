@@ -1,0 +1,631 @@
+"""
+normalize.py — Flattens raw statsapi JSON → relational CSV tables.
+Output: dim_teams, fact_games, fact_linescore,
+        fact_team_stats, fact_player_stats, fact_standings,
+        fact_batter_pitcher_matchups, fact_batter_game_logs,
+        fact_pitcher_game_logs,
+        fact_pitches, fact_statcast, fact_events, fact_runners,
+        fact_pitch_locations, fact_hit_locations, fact_innings,
+        fact_substitutions, fact_defense
+"""
+import json, logging
+from pathlib import Path
+import pandas as pd
+from datetime import date
+
+print("USING NORMALIZE VERSION 1M")
+
+LOG_DIR = Path(__file__).parent.parent / "logs"
+LOG_DIR.mkdir(parents=True, exist_ok=True)
+
+today_str = date.today().strftime("%Y-%m-%d")
+LOG_FILE = LOG_DIR / f"normalize_{today_str}.log"
+
+logging.basicConfig(
+    level=logging.INFO,
+    format="%(asctime)s  %(levelname)-8s  %(message)s",
+    handlers=[
+        logging.FileHandler(LOG_FILE, encoding="utf-8"),
+        logging.StreamHandler()
+    ]
+)
+
+log = logging.getLogger(__name__)
+
+RAW_DIR = Path(__file__).parent.parent / "data" / "raw"
+OUT_DIR = Path(__file__).parent.parent / "data" / "normalized"
+OUT_DIR.mkdir(parents=True, exist_ok=True)
+
+
+def load_json(path):
+    with open(path, encoding="utf-8") as f:
+        return json.load(f)
+
+
+def save_csv(df, name):
+    df.to_csv(OUT_DIR / name, index=False)
+    log.info("Wrote %s  (%d rows × %d cols)", name, len(df), len(df.columns))
+
+
+def should_build(output_name, raw_paths):
+    """
+    Smart rebuild:
+    - If no raw_paths → skip (warn).
+    - If output CSV missing → build.
+    - If any raw file newer than CSV → rebuild.
+    - Else → skip.
+    """
+    out_path = OUT_DIR / output_name
+    if not raw_paths:
+        log.warning("No raw files found for %s — skipping", output_name)
+        return False
+    if not out_path.exists():
+        log.info("%s does not exist — building", output_name)
+        return True
+
+    csv_mtime = out_path.stat().st_mtime
+    newest_raw = max(p.stat().st_mtime for p in raw_paths)
+    if newest_raw > csv_mtime:
+        log.info("Raw data newer than %s — rebuilding", output_name)
+        return True
+
+    log.info("%s is up to date — skipping", output_name)
+    return False
+
+
+def build_dim_teams():
+    data = load_json(RAW_DIR / "teams" / "teams.json")
+    rows = [{
+        "team_id": t.get("id"),
+        "team_name": t.get("name"),
+        "abbreviation": t.get("abbreviation"),
+        "short_name": t.get("shortName"),
+        "location_name": t.get("locationName"),
+        "venue_id": t.get("venue", {}).get("id"),
+        "venue_name": t.get("venue", {}).get("name"),
+        "league_id": t.get("league", {}).get("id"),
+        "league_name": t.get("league", {}).get("name"),
+        "division_id": t.get("division", {}).get("id"),
+        "division_name": t.get("division", {}).get("name"),
+        "first_year": t.get("firstYearOfPlay"),
+    } for t in data.get("teams", [])]
+    save_csv(pd.DataFrame(rows), "dim_teams.csv")
+
+
+def build_fact_games():
+    rows = []
+    for path in sorted((RAW_DIR / "schedule").glob("schedule_*.json")):
+        data = load_json(path)
+        game_date = path.stem.replace("schedule_", "")
+        for day in data.get("dates", []):
+            for g in day.get("games", []):
+                teams = g.get("teams", {})
+                away, home = teams.get("away", {}), teams.get("home", {})
+                ls = g.get("linescore", {})
+                rows.append({
+                    "game_pk": g.get("gamePk"),
+                    "game_date": game_date,
+                    "status": g.get("status", {}).get("detailedState"),
+                    "away_team_id": away.get("team", {}).get("id"),
+                    "away_team_name": away.get("team", {}).get("name"),
+                    "away_wins": away.get("leagueRecord", {}).get("wins"),
+                    "away_losses": away.get("leagueRecord", {}).get("losses"),
+                    "away_win_pct": away.get("leagueRecord", {}).get("pct"),
+                    "away_probable_pitcher": away.get("probablePitcher", {}).get("fullName"),
+                    "away_score": away.get("score"),
+                    "away_is_winner": away.get("isWinner"),
+                    "home_team_id": home.get("team", {}).get("id"),
+                    "home_team_name": home.get("team", {}).get("name"),
+                    "home_wins": home.get("leagueRecord", {}).get("wins"),
+                    "home_losses": home.get("leagueRecord", {}).get("losses"),
+                    "home_win_pct": home.get("leagueRecord", {}).get("pct"),
+                    "home_probable_pitcher": home.get("probablePitcher", {}).get("fullName"),
+                    "home_score": home.get("score"),
+                    "home_is_winner": home.get("isWinner"),
+                    "innings_count": ls.get("currentInning"),
+                    "venue_name": g.get("venue", {}).get("name"),
+                })
+    df = pd.DataFrame(rows)
+    df["game_date"] = pd.to_datetime(df["game_date"])
+    df = df.drop_duplicates(subset=["game_pk"], keep="last")
+    save_csv(df, "fact_games.csv")
+
+
+def build_fact_linescore():
+    rows = []
+    for path in sorted((RAW_DIR / "schedule").glob("schedule_*.json")):
+        data = load_json(path)
+        for day in data.get("dates", []):
+            for g in day.get("games", []):
+                for inning in g.get("linescore", {}).get("innings", []):
+                    rows.append({
+                        "game_pk": g.get("gamePk"),
+                        "inning_num": inning.get("num"),
+                        "away_runs": inning.get("away", {}).get("runs"),
+                        "away_hits": inning.get("away", {}).get("hits"),
+                        "home_runs": inning.get("home", {}).get("runs"),
+                        "home_hits": inning.get("home", {}).get("hits"),
+                    })
+    save_csv(pd.DataFrame(rows), "fact_linescore.csv")
+
+
+def build_fact_team_stats():
+    rows = []
+    for path in (RAW_DIR / "team_stats").glob("team_*.json"):
+        parts = path.stem.split("_")
+        group, season = parts[1], parts[2]
+        for sb in load_json(path).get("stats", []):
+            for split in sb.get("splits", []):
+                row = {
+                    "group": group,
+                    "season": season,
+                    "team_id": split.get("team", {}).get("id"),
+                    "team_name": split.get("team", {}).get("name"),
+                }
+                row.update(split.get("stat", {}))
+                rows.append(row)
+    save_csv(pd.DataFrame(rows), "fact_team_stats.csv")
+
+
+def build_fact_player_stats():
+    rows = []
+    player_dir = RAW_DIR / "player_stats"
+    if not player_dir.exists():
+        log.warning("No player_stats directory found — skipping")
+        return
+    for path in player_dir.glob("player_*.json"):
+        parts = path.stem.split("_")
+        group = parts[1]
+        season = parts[2]
+        for sb in load_json(path).get("stats", []):
+            for split in sb.get("splits", []):
+                row = {
+                    "group": group,
+                    "season": season,
+                    "player_id": split.get("player", {}).get("id"),
+                    "player_name": split.get("player", {}).get("fullName"),
+                    "team_id": split.get("team", {}).get("id"),
+                    "team_name": split.get("team", {}).get("name"),
+                    "position": split.get("position", {}).get("abbreviation"),
+                }
+                row.update(split.get("stat", {}))
+                rows.append(row)
+    save_csv(pd.DataFrame(rows), "fact_player_stats.csv")
+
+
+def build_fact_batter_pitcher_matchups():
+    rows = []
+    feed_dir = RAW_DIR / "game_feeds"
+    for path in sorted(feed_dir.glob("game_*.json")):
+        data = load_json(path)
+        game_pk = int(path.stem.replace("game_", ""))
+        all_plays = (
+            data.get("liveData", {})
+                .get("plays", {})
+                .get("allPlays", [])
+        )
+        for play in all_plays:
+            matchup = play.get("matchup", {})
+            result = play.get("result", {})
+            batter = matchup.get("batter", {})
+            pitcher = matchup.get("pitcher", {})
+            rows.append({
+                "game_pk": game_pk,
+                "batter_id": batter.get("id"),
+                "batter_name": batter.get("fullName"),
+                "pitcher_id": pitcher.get("id"),
+                "pitcher_name": pitcher.get("fullName"),
+                "event": result.get("event"),
+                "event_type": result.get("eventType"),
+                "is_hit": 1 if result.get("eventType") in ["single", "double", "triple", "home_run"] else 0,
+                "is_hr": 1 if result.get("eventType") == "home_run" else 0,
+                "is_so": 1 if result.get("eventType") == "strikeout" else 0,
+                "is_multi": 0,
+            })
+    save_csv(pd.DataFrame(rows), "fact_batter_pitcher_matchups.csv")
+
+
+def build_fact_batter_game_logs():
+    src = OUT_DIR / "fact_batter_pitcher_matchups.csv"
+    if not src.exists():
+        log.warning("fact_batter_pitcher_matchups.csv missing — skipping fact_batter_game_logs.csv")
+        return
+    df = pd.read_csv(src)
+    agg = df.groupby(["game_pk", "batter_id", "batter_name"]).agg({
+        "is_hit": "sum",
+        "is_hr": "sum",
+        "is_so": "sum",
+    }).reset_index()
+    agg["is_multi"] = (agg["is_hit"] >= 2).astype(int)
+    save_csv(agg, "fact_batter_game_logs.csv")
+
+
+def build_fact_pitcher_game_logs():
+    src = OUT_DIR / "fact_batter_pitcher_matchups.csv"
+    if not src.exists():
+        log.warning("fact_batter_pitcher_matchups.csv missing — skipping fact_pitcher_game_logs.csv")
+        return
+    df = pd.read_csv(src)
+    agg = df.groupby(["game_pk", "pitcher_id", "pitcher_name"]).agg({
+        "is_hit": "sum",
+        "is_hr": "sum",
+        "is_so": "sum",
+    }).reset_index()
+    save_csv(agg, "fact_pitcher_game_logs.csv")
+
+
+def build_fact_standings():
+    teams_data = load_json(RAW_DIR / "teams" / "teams.json")
+    team_division = {
+        t.get("id"): t.get("division", {}).get("name")
+        for t in teams_data.get("teams", [])
+    }
+    rows = []
+    for path in (RAW_DIR / "standings").glob("standings_*.json"):
+        season = path.stem.replace("standings_", "")
+        for rec in load_json(path).get("records", []):
+            div = rec.get("division", {})
+            for tr in rec.get("teamRecords", []):
+                splits = {s["type"]: s for s in tr.get("records", {}).get("splitRecords", [])}
+                xwl = tr.get("expectedRecords", {}).get("xWinLoss", "0-0").split("-")
+                team_id = tr.get("team", {}).get("id")
+                rows.append({
+                    "season": season,
+                    "division_name": div.get("name") or team_division.get(team_id),
+                    "team_id": team_id,
+                    "team_name": tr.get("team", {}).get("name"),
+                    "wins": tr.get("wins"),
+                    "losses": tr.get("losses"),
+                    "win_pct": tr.get("winningPercentage"),
+                    "games_back": tr.get("gamesBack"),
+                    "run_diff": tr.get("runDifferential"),
+                    "runs_scored": tr.get("runsScored"),
+                    "runs_allowed": tr.get("runsAllowed"),
+                    "home_wins": splits.get("home", {}).get("wins"),
+                    "away_wins": splits.get("away", {}).get("wins"),
+                    "one_run_wins": splits.get("oneRun", {}).get("wins"),
+                    "extra_inn_wins": splits.get("extraInning", {}).get("wins"),
+                    "xwins": xwl[0],
+                    "xlosses": xwl[-1],
+                })
+    save_csv(pd.DataFrame(rows), "fact_standings.csv")
+
+
+def build_fact_pitches():
+    rows = []
+    feed_dir = RAW_DIR.parent / "statcast_raw"
+    raw_files = sorted(feed_dir.glob("statcast_*.json"))
+
+    if not should_build("fact_pitches.csv", raw_files):
+        return
+
+    for path in raw_files:
+        data = load_json(path)
+        game_pk = int(path.stem.replace("statcast_", ""))
+
+        all_plays = (
+            data.get("liveData", {})
+                .get("plays", {})
+                .get("allPlays", [])
+        )
+
+        for play in all_plays:
+            play_events = play.get("playEvents", [])
+            batter = play.get("matchup", {}).get("batter", {})
+            pitcher = play.get("matchup", {}).get("pitcher", {})
+
+            for ev in play_events:
+                pitch = ev.get("pitchData")
+                if not pitch:
+                    continue
+
+                rows.append({
+                    "game_pk": game_pk,
+                    "play_id": play.get("playId"),
+                    "batter_id": batter.get("id"),
+                    "pitcher_id": pitcher.get("id"),
+                    "pitch_type": ev.get("details", {}).get("type", {}).get("description"),
+                    "start_speed": pitch.get("startSpeed"),
+                    "end_speed": pitch.get("endSpeed"),
+                    "spin_rate": pitch.get("breaks", {}).get("spinRate"),
+                    "spin_direction": pitch.get("breaks", {}).get("spinDirection"),
+                    "break_x": pitch.get("breaks", {}).get("breakHorizontal"),
+                    "break_z": pitch.get("breaks", {}).get("breakVertical"),
+                    "plate_x": pitch.get("coordinates", {}).get("pX"),
+                    "plate_z": pitch.get("coordinates", {}).get("pZ"),
+                    "sz_top": pitch.get("strikeZoneTop"),
+                    "sz_bot": pitch.get("strikeZoneBottom"),
+                    "zone": pitch.get("zone"),
+                    "call": ev.get("details", {}).get("call", {}).get("description"),
+                    "inning": play.get("about", {}).get("inning"),
+                    "is_top_inning": play.get("about", {}).get("isTopInning"),
+                    "count_balls": play.get("count", {}).get("balls"),
+                    "count_strikes": play.get("count", {}).get("strikes"),
+                })
+
+    save_csv(pd.DataFrame(rows), "fact_pitches.csv")
+
+
+def build_fact_statcast():
+    rows = []
+    feed_dir = RAW_DIR.parent / "statcast_raw"
+    raw_files = sorted(feed_dir.glob("statcast_*.json"))
+
+    if not should_build("fact_statcast.csv", raw_files):
+        return
+
+    for path in raw_files:
+        data = load_json(path)
+        game_pk = int(path.stem.replace("statcast_", ""))
+
+        all_plays = (
+            data.get("liveData", {})
+                .get("plays", {})
+                .get("allPlays", [])
+        )
+
+        for play in all_plays:
+            batter = play.get("matchup", {}).get("batter", {})
+            pitcher = play.get("matchup", {}).get("pitcher", {})
+            hit = play.get("hitData")
+
+            if not hit:
+                continue
+
+            rows.append({
+                "game_pk": game_pk,
+                "batter_id": batter.get("id"),
+                "pitcher_id": pitcher.get("id"),
+                "exit_velocity": hit.get("launchSpeed"),
+                "launch_angle": hit.get("launchAngle"),
+                "spray_angle": hit.get("sprayAngle"),
+                "hit_distance": hit.get("totalDistance"),
+                "is_barrel": hit.get("isBarrel"),
+                "is_hard_hit": 1 if (hit.get("launchSpeed") or 0) >= 95 else 0,
+                "xBA": hit.get("estimatedBA"),
+                "xSLG": hit.get("estimatedSLG"),
+                "xWOBA": hit.get("estimatedWOBA"),
+                "event": play.get("result", {}).get("event"),
+            })
+
+    save_csv(pd.DataFrame(rows), "fact_statcast.csv")
+
+
+def build_fact_events():
+    rows = []
+    feed_dir = RAW_DIR.parent / "statcast_raw"
+    raw_files = sorted(feed_dir.glob("statcast_*.json"))
+
+    if not should_build("fact_events.csv", raw_files):
+        return
+
+    for path in raw_files:
+        data = load_json(path)
+        game_pk = int(path.stem.replace("statcast_", ""))
+
+        all_plays = (
+            data.get("liveData", {})
+                .get("plays", {})
+                .get("allPlays", [])
+        )
+
+        for play in all_plays:
+            result = play.get("result", {})
+            matchup = play.get("matchup", {})
+            batter = matchup.get("batter", {})
+            pitcher = matchup.get("pitcher", {})
+
+            rows.append({
+                "game_pk": game_pk,
+                "play_id": play.get("playId"),
+                "batter_id": batter.get("id"),
+                "pitcher_id": pitcher.get("id"),
+                "event": result.get("event"),
+                "event_type": result.get("eventType"),
+                "description": result.get("description"),
+                "rbi": result.get("rbi"),
+                "outs": result.get("outs"),
+                "inning": play.get("about", {}).get("inning"),
+                "is_top_inning": play.get("about", {}).get("isTopInning"),
+            })
+
+    save_csv(pd.DataFrame(rows), "fact_events.csv")
+
+
+def build_fact_runners():
+    rows = []
+    feed_dir = RAW_DIR.parent / "statcast_raw"
+    raw_files = sorted(feed_dir.glob("statcast_*.json"))
+
+    if not should_build("fact_runners.csv", raw_files):
+        return
+
+    for path in raw_files:
+        data = load_json(path)
+        game_pk = int(path.stem.replace("statcast_", ""))
+
+        all_plays = (
+            data.get("liveData", {})
+                .get("plays", {})
+                .get("allPlays", [])
+        )
+
+        for play in all_plays:
+            if not play:
+                continue  # MLB sometimes returns null plays
+
+            for runner in play.get("runners", []):
+                if not runner:
+                    continue  # MLB sometimes returns null runners
+
+                details = runner.get("details") or {}
+                runner_obj = details.get("runner") or {}
+                resp_pitcher = details.get("responsiblePitcher") or {}
+
+                rows.append({
+                    "game_pk": game_pk,
+                    "play_id": play.get("playId"),
+                    "runner_id": runner_obj.get("id"),
+                    "start_base": runner.get("movement", {}).get("start"),
+                    "end_base": runner.get("movement", {}).get("end"),
+                    "is_out": runner.get("movement", {}).get("isOut"),
+                    "is_scored": runner.get("movement", {}).get("isScored"),
+                    "movement_reason": runner.get("movement", {}).get("movementReason"),
+                    "responsible_pitcher": resp_pitcher.get("id"),
+                })
+
+    save_csv(pd.DataFrame(rows), "fact_runners.csv")
+
+
+def build_fact_pitch_locations():
+    src = OUT_DIR / "fact_pitches.csv"
+    if not src.exists():
+        log.warning("fact_pitches.csv missing — skipping fact_pitch_locations.csv")
+        return
+    df = pd.read_csv(src)
+    cols = [
+        "game_pk", "play_id", "batter_id", "pitcher_id",
+        "plate_x", "plate_z", "sz_top", "sz_bot", "zone"
+    ]
+    save_csv(df[cols], "fact_pitch_locations.csv")
+
+
+def build_fact_hit_locations():
+    src = OUT_DIR / "fact_statcast.csv"
+    if not src.exists():
+        log.warning("fact_statcast.csv missing — skipping fact_hit_locations.csv")
+        return
+    df = pd.read_csv(src)
+    cols = [
+        "game_pk", "batter_id", "pitcher_id",
+        "spray_angle", "hit_distance", "launch_angle"
+    ]
+    save_csv(df[cols], "fact_hit_locations.csv")
+
+
+def build_fact_innings():
+    rows = []
+    feed_dir = RAW_DIR.parent / "statcast_raw"
+    raw_files = sorted(feed_dir.glob("statcast_*.json"))
+
+    if not should_build("fact_innings.csv", raw_files):
+        return
+
+    for path in raw_files:
+        data = load_json(path)
+        game_pk = int(path.stem.replace("statcast_", ""))
+
+        innings = data.get("liveData", {}).get("linescore", {}).get("innings", [])
+        for inn in innings:
+            rows.append({
+                "game_pk": game_pk,
+                "inning": inn.get("num"),
+                "away_runs": inn.get("away", {}).get("runs"),
+                "home_runs": inn.get("home", {}).get("runs"),
+                "away_hits": inn.get("away", {}).get("hits"),
+                "home_hits": inn.get("home", {}).get("hits"),
+                "away_errors": inn.get("away", {}).get("errors"),
+                "home_errors": inn.get("home", {}).get("errors"),
+            })
+
+    save_csv(pd.DataFrame(rows), "fact_innings.csv")
+
+
+def build_fact_substitutions():
+    rows = []
+    feed_dir = RAW_DIR.parent / "statcast_raw"
+    raw_files = sorted(feed_dir.glob("statcast_*.json"))
+
+    if not should_build("fact_substitutions.csv", raw_files):
+        return
+
+    for path in raw_files:
+        data = load_json(path)
+        game_pk = int(path.stem.replace("statcast_", ""))
+
+        all_plays = (
+            data.get("liveData", {})
+                .get("plays", {})
+                .get("allPlays", [])
+        )
+
+        for play in all_plays:
+            for sub in play.get("substitution", []) or []:
+                rows.append({
+                    "game_pk": game_pk,
+                    "play_id": play.get("playId"),
+                    "player_in": sub.get("playerIn", {}).get("fullName"),
+                    "player_out": sub.get("playerOut", {}).get("fullName"),
+                    "position": sub.get("position", {}).get("abbreviation"),
+                    "inning": play.get("about", {}).get("inning"),
+                })
+
+    save_csv(pd.DataFrame(rows), "fact_substitutions.csv")
+
+
+def build_fact_defense():
+    rows = []
+    feed_dir = RAW_DIR.parent / "statcast_raw"
+    raw_files = sorted(feed_dir.glob("statcast_*.json"))
+
+    if not should_build("fact_defense.csv", raw_files):
+        return
+
+    for path in raw_files:
+        data = load_json(path)
+        game_pk = int(path.stem.replace("statcast_", ""))
+
+        all_plays = (
+            data.get("liveData", {})
+                .get("plays", {})
+                .get("allPlays", [])
+        )
+
+        for play in all_plays:
+            defense = play.get("defense", {})
+            if not defense:
+                continue
+
+            rows.append({
+                "game_pk": game_pk,
+                "play_id": play.get("playId"),
+                "pitcher_id": defense.get("pitcher", {}).get("id"),
+                "catcher_id": defense.get("catcher", {}).get("id"),
+                "first_id": defense.get("first", {}).get("id"),
+                "second_id": defense.get("second", {}).get("id"),
+                "third_id": defense.get("third", {}).get("id"),
+                "shortstop_id": defense.get("shortstop", {}).get("id"),
+                "left_id": defense.get("left", {}).get("id"),
+                "center_id": defense.get("center", {}).get("id"),
+                "right_id": defense.get("right", {}).get("id"),
+            })
+
+    save_csv(pd.DataFrame(rows), "fact_defense.csv")
+
+
+def run():
+    build_dim_teams()
+    build_fact_games()
+    build_fact_linescore()
+    build_fact_team_stats()
+    build_fact_player_stats()
+    build_fact_standings()
+    build_fact_batter_pitcher_matchups()
+    build_fact_batter_game_logs()
+    build_fact_pitcher_game_logs()
+
+    build_fact_pitches()
+    build_fact_statcast()
+    build_fact_events()
+    build_fact_runners()
+    build_fact_pitch_locations()
+    build_fact_hit_locations()
+    build_fact_innings()
+    build_fact_substitutions()
+    build_fact_defense()
+
+    log.info("=== Normalization complete ===")
+
+
+if __name__ == "__main__":
+    run()

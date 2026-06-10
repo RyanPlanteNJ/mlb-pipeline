@@ -1,0 +1,266 @@
+"""
+win_probability.py — XGBoost win-probability model.
+Features: differential hitting + pitching stats (home − away).
+Outputs: fact_win_probability.csv with home_win_prob, confidence_label, prediction_correct.
+"""
+
+import argparse
+import logging
+import pickle
+import warnings
+from datetime import date
+from pathlib import Path
+
+import numpy as np
+import pandas as pd
+import xgboost as xgb
+
+warnings.filterwarnings("ignore")
+logging.basicConfig(level=logging.INFO, format="%(asctime)s  %(levelname)-8s  %(message)s")
+log = logging.getLogger(__name__)
+
+# ----------------------------------------
+# Paths
+# ----------------------------------------
+NORM_DIR = Path(__file__).parent.parent / "data" / "normalized"
+MODEL_DIR = Path(__file__).parent / "models"
+MODEL_DIR.mkdir(exist_ok=True)
+MODEL_PATH = MODEL_DIR / "win_prob_model.pkl"
+
+# ----------------------------------------
+# Feature Lists
+# ----------------------------------------
+HITTING_COLS = ["avg", "obp", "slg", "ops", "runs", "homeRuns", "strikeOuts", "baseOnBalls"]
+PITCHING_COLS = ["era", "whip", "strikeoutsPer9", "walksPer9", "homeRunsPer9"]
+
+# ----------------------------------------
+# Load normalized tables
+# ----------------------------------------
+def load_tables():
+    tables = {}
+    for f in NORM_DIR.glob("*.csv"):
+        try:
+            df = pd.read_csv(f,encoding="utf-8", encoding_errors="ignore")
+            if df.empty:
+                print(f"⚠️ Skipping empty table: {f.name}")
+                continue
+            tables[f.stem] = df
+        except pd.errors.EmptyDataError:
+            print(f"⚠️ Skipping truly empty file: {f.name}")
+            continue
+    return tables
+
+
+# ----------------------------------------
+# Pivot team stats
+# ----------------------------------------
+def pivot_stats(team_stats, group):
+    cols = HITTING_COLS if group == "hitting" else PITCHING_COLS
+    sub = team_stats[team_stats["group"] == group].copy()
+    avail = [c for c in cols if c in sub.columns]
+    sub = sub.groupby("team_id")[avail].mean().reset_index()
+    sub.columns = ["team_id"] + [f"{group}_{c}" for c in avail]
+    return sub
+
+# ----------------------------------------
+# Build feature matrix
+# ----------------------------------------
+def build_features(games, team_stats, standings):
+    hit = pivot_stats(team_stats, "hitting")
+    pit = pivot_stats(team_stats, "pitching")
+
+    df = games.copy()
+
+    for side in ("home", "away"):
+        df = df.merge(
+            hit.add_suffix(f"_{side}").rename(columns={f"team_id_{side}": f"{side}_team_id"}),
+            on=f"{side}_team_id",
+            how="left"
+        )
+        df = df.merge(
+            pit.add_suffix(f"_{side}").rename(columns={f"team_id_{side}": f"{side}_team_id"}),
+            on=f"{side}_team_id",
+            how="left"
+        )
+
+    stand = standings[["team_id", "win_pct", "run_diff"]].copy()
+    for side in ("home", "away"):
+        df = df.merge(
+            stand.rename(columns={
+                "team_id": f"{side}_team_id",
+                "win_pct": f"{side}_wp",
+                "run_diff": f"{side}_rd"
+            }),
+            on=f"{side}_team_id",
+            how="left"
+        )
+
+    diffs = {}
+    for base in [f"hitting_{c}" for c in HITTING_COLS] + [f"pitching_{c}" for c in PITCHING_COLS]:
+        hc, ac = f"{base}_home", f"{base}_away"
+        if hc in df.columns and ac in df.columns:
+            diffs[f"diff_{base}"] = pd.to_numeric(df[hc], errors="coerce") - pd.to_numeric(df[ac], errors="coerce")
+
+    diffs["diff_win_pct"] = df["home_wp"] - df["away_wp"]
+    diffs["diff_run_diff"] = df["home_rd"] - df["away_rd"]
+
+    return pd.concat([
+        df[[
+            "game_pk", "game_date",
+            "home_team_id", "home_team_name",
+            "away_team_id", "away_team_name",
+            "home_is_winner"
+        ]],
+        pd.DataFrame(diffs, index=df.index)
+    ], axis=1)
+
+# ----------------------------------------
+# Feature selector
+# ----------------------------------------
+def feat_cols(df):
+    return [c for c in df.columns if c.startswith("diff_")]
+
+# ----------------------------------------
+# Train model
+# ----------------------------------------
+def train(features):
+    # ----------------------------------------
+    # HYBRID TRAINING: long-term + short-term
+    # ----------------------------------------
+    features["game_date"] = pd.to_datetime(features["game_date"], errors="coerce")
+
+    # Long-term: all seasons
+    train_long = features.dropna(subset=["home_is_winner"]).copy()
+    train_long["home_is_winner"] = train_long["home_is_winner"].astype(int)
+
+    X_long = train_long[feat_cols(train_long)].fillna(0)
+    y_long = train_long["home_is_winner"]
+
+    model_long = xgb.XGBClassifier(
+        n_estimators=300,
+        max_depth=6,
+        learning_rate=0.05,
+        subsample=0.8,
+        colsample_bytree=0.8,
+        eval_metric="logloss"
+    )
+    model_long.fit(X_long, y_long)
+
+    # Short-term: last 3 seasons
+    max_year = features["game_date"].dt.year.max()
+    cutoff_year = max_year - 2
+    short = features[features["game_date"].dt.year >= cutoff_year]
+
+    train_short = short.dropna(subset=["home_is_winner"]).copy()
+    train_short["home_is_winner"] = train_short["home_is_winner"].astype(int)
+
+    X_short = train_short[feat_cols(train_short)].fillna(0)
+    y_short = train_short["home_is_winner"]
+
+    model_short = xgb.XGBClassifier(
+        n_estimators=300,
+        max_depth=6,
+        learning_rate=0.05,
+        subsample=0.8,
+        colsample_bytree=0.8,
+        eval_metric="logloss"
+    )
+    model_short.fit(X_short, y_short)
+
+    # Save both
+    with open(MODEL_DIR / "win_prob_model_long.pkl", "wb") as f:
+        pickle.dump(model_long, f)
+    with open(MODEL_DIR / "win_prob_model_short.pkl", "wb") as f:
+        pickle.dump(model_short, f)
+
+    log.info(
+        "Win-probability models trained → long: %d games, short: %d games",
+        len(train_long), len(train_short)
+    )
+
+    return model_long, model_short
+
+
+# ----------------------------------------
+# RUN FUNCTION
+# ----------------------------------------
+def run(game_date=None):
+    if game_date is None:
+        game_date = str(date.today())
+
+    tables = load_tables()
+    feats = build_features(
+        tables["fact_games"],
+        tables["fact_team_stats"],
+        tables["fact_standings"]
+    )
+
+    long_path = MODEL_DIR / "win_prob_model_long.pkl"
+    short_path = MODEL_DIR / "win_prob_model_short.pkl"
+
+    if long_path.exists() and short_path.exists():
+        model_long = pickle.load(open(long_path, "rb"))
+        model_short = pickle.load(open(short_path, "rb"))
+    else:
+        model_long, model_short = train(feats)
+
+    X = feats[feat_cols(feats)].fillna(0)
+
+    probs_long = model_long.predict_proba(X)[:, 1]
+    probs_short = model_short.predict_proba(X)[:, 1]
+
+    # Hybrid blend: 70% short-term, 30% long-term
+    probs = 0.7 * probs_short + 0.3 * probs_long
+
+
+    out = feats[[
+        "game_pk", "game_date",
+        "home_team_id", "home_team_name",
+        "away_team_id", "away_team_name",
+        "home_is_winner"
+    ]].copy()
+
+    out["home_win_prob"] = np.round(probs, 4)
+    out["away_win_prob"] = np.round(1 - probs, 4)
+    out["predicted_winner"] = np.where(
+        probs >= 0.5,
+        out["home_team_name"],
+        out["away_team_name"]
+    )
+
+    out["confidence_label"] = pd.cut(
+        np.abs(probs - 0.5),
+        bins=[0, .10, .20, 1.0],
+        labels=["Toss-Up", "Medium", "High"]
+    )
+
+    done = out["home_is_winner"].notna()
+    out.loc[done, "prediction_correct"] = (
+        (out.loc[done, "home_win_prob"] >= 0.5) ==
+        out.loc[done, "home_is_winner"].astype(bool)
+    )
+
+    out.to_csv(NORM_DIR / "fact_win_probability.csv", index=False)
+    log.info("Predictions written → fact_win_probability.csv")
+
+    today = out[out["game_date"] == game_date]
+
+    # If duplicates exist, keep the last row per game_pk
+    today = today.sort_values("game_pk").groupby("game_pk").tail(1)
+
+    for _, r in today.iterrows():
+        log.info(
+            "  %s @ %s  → home %.1f%%  (pick: %s)",
+            r["away_team_name"], r["home_team_name"],
+            r["home_win_prob"] * 100,
+            r["predicted_winner"]
+        )
+
+
+# ----------------------------------------
+# CLI
+# ----------------------------------------
+if __name__ == "__main__":
+    p = argparse.ArgumentParser()
+    p.add_argument("--date", default=str(date.today()))
+    run(p.parse_args().date)

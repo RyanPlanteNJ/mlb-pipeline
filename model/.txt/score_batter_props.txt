@@ -1,0 +1,154 @@
+import pandas as pd
+import numpy as np
+import pickle
+from pathlib import Path
+from datetime import date
+import requests
+
+# ----------------------------------------
+# Paths
+# ----------------------------------------
+BASE_NORM = Path(__file__).parent.parent / "data" / "normalized"
+MODEL_DIR = Path(__file__).parent / "models"
+
+# ----------------------------------------
+# RUN FUNCTION
+# ----------------------------------------
+def run():
+    # Load models
+    models = {
+        "hit": pickle.load(open(MODEL_DIR / "batter_prop_hit.pkl", "rb")),
+        "hr": pickle.load(open(MODEL_DIR / "batter_prop_hr.pkl", "rb")),
+        "multi": pickle.load(open(MODEL_DIR / "batter_prop_multi.pkl", "rb")),
+        "k": pickle.load(open(MODEL_DIR / "batter_prop_k.pkl", "rb")),
+    }
+
+    # Load normalized data
+    player_stats = pd.read_csv(BASE_NORM / "fact_player_stats.csv",encoding="utf-8", encoding_errors="ignore")
+    batter_logs = pd.read_csv(BASE_NORM / "fact_batter_game_logs.csv",encoding="utf-8", encoding_errors="ignore")
+    pitcher_logs = pd.read_csv(BASE_NORM / "fact_pitcher_game_logs.csv",encoding="utf-8", encoding_errors="ignore")
+    games = pd.read_csv(BASE_NORM / "fact_games.csv",encoding="utf-8", encoding_errors="ignore")[["game_pk", "game_date"]]
+
+    # Fetch today's schedule
+    def fetch_schedule(game_date):
+        url = "https://statsapi.mlb.com/api/v1/schedule"
+        params = {
+            "sportId": 1,
+            "date": game_date,
+            "hydrate": "team,probablePitcher"
+        }
+        resp = requests.get(url, params=params).json()
+
+        rows = []
+        for day in resp.get("dates", []):
+            for g in day.get("games", []):
+                rows.append({
+                    "game_pk": g["gamePk"],
+                    "game_date": game_date,
+                    "home_team_id": g["teams"]["home"]["team"]["id"],
+                    "away_team_id": g["teams"]["away"]["team"]["id"],
+                    "home_pitcher_id": g["teams"]["home"].get("probablePitcher", {}).get("id"),
+                    "away_pitcher_id": g["teams"]["away"].get("probablePitcher", {}).get("id"),
+                })
+        return pd.DataFrame(rows)
+
+    today = str(date.today())
+    schedule = fetch_schedule(today)
+
+    # Build batter list
+    batters = player_stats[player_stats["group"] == "hitting"][[
+        "player_id", "player_name", "team_id"
+    ]]
+
+    batters_today = batters.merge(
+        schedule.add_suffix("_home"),
+        left_on="team_id",
+        right_on="home_team_id_home",
+        how="left"
+    ).merge(
+        schedule.add_suffix("_away"),
+        left_on="team_id",
+        right_on="away_team_id_away",
+        how="left"
+    )
+
+    batters_today["game_pk"] = batters_today["game_pk_home"].fillna(
+        batters_today["game_pk_away"]
+    )
+
+    batters_today["opp_pitcher_id"] = np.where(
+        batters_today["team_id"] == batters_today["home_team_id_home"],
+        batters_today["away_pitcher_id_home"],
+        batters_today["home_pitcher_id_away"]
+    )
+
+    batters_today = batters_today.dropna(subset=["game_pk", "opp_pitcher_id"])
+
+    # Rolling stats
+    batter_roll = batter_logs.add_prefix("batter_")
+    pitcher_roll = pitcher_logs.add_prefix("pitcher_")
+
+    df = batters_today.merge(
+        batter_roll,
+        left_on=["player_id", "game_pk"],
+        right_on=["batter_batter_id", "batter_game_pk"],
+        how="left"
+    ).merge(
+        pitcher_roll,
+        left_on=["opp_pitcher_id", "game_pk"],
+        right_on=["pitcher_pitcher_id", "pitcher_game_pk"],
+        how="left"
+    )
+
+    # Season stats
+    batter_season = player_stats[player_stats["group"] == "hitting"].add_prefix("batter_")
+    pitcher_season = player_stats[player_stats["group"] == "pitching"].add_prefix("pitcher_")
+
+    df = df.merge(
+        batter_season,
+        left_on="player_id",
+        right_on="batter_player_id",
+        how="left"
+    ).merge(
+        pitcher_season,
+        left_on="opp_pitcher_id",
+        right_on="pitcher_player_id",
+        how="left"
+    )
+
+    # Match training logic
+    numeric_df = df.select_dtypes(include=["number"]).copy()
+    numeric_df = numeric_df[[c for c in numeric_df.columns if not c.endswith("_prob")]]
+
+    for key, model in models.items():
+        model_features = model.get_booster().feature_names
+        aligned = numeric_df.reindex(columns=model_features, fill_value=0)
+        df[f"{key}_prob"] = model.predict_proba(aligned)[:, 1]
+
+    # Final output
+    out = df[[
+        "player_id",
+        "player_name",
+        "team_id",
+        "game_pk",
+        "opp_pitcher_id",
+        "hit_prob",
+        "hr_prob",
+        "multi_prob",
+        "k_prob"
+    ]]
+
+    # Add team_name
+    team_lookup = player_stats[player_stats["group"] == "hitting"][["player_id", "team_name"]]
+    out = out.merge(team_lookup, on="player_id", how="left")
+
+    # Add game_date
+    out = out.merge(games, on="game_pk", how="left")
+
+    # Save final props file
+    out.to_csv(BASE_NORM / "fact_player_props.csv", index=False)
+    print("Saved → fact_player_props.csv")
+
+
+if __name__ == "__main__":
+    run()

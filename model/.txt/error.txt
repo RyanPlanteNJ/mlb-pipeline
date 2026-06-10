@@ -1,0 +1,332 @@
+[2026-06-06 09:52:57] [WARNING ] discord.gateway: Shard ID None heartbeat blocked for more than 10 seconds.
+Loop thread traceback (most recent call last):
+  File "C:\Users\ryanm\Documents\mlb_pipeline\discord_bot.py", line 616, in <module>
+    bot.run(TOKEN)
+  File "C:\Python311\Lib\site-packages\discord\client.py", line 933, in run
+    asyncio.run(runner())
+  File "C:\Python311\Lib\asyncio\runners.py", line 190, in run
+    return runner.run(main)
+  File "C:\Python311\Lib\asyncio\runners.py", line 118, in run
+    return self._loop.run_until_complete(task)
+  File "C:\Python311\Lib\asyncio\base_events.py", line 641, in run_until_complete
+    self.run_forever()
+  File "C:\Python311\Lib\asyncio\windows_events.py", line 321, in run_forever
+    super().run_forever()
+  File "C:\Python311\Lib\asyncio\base_events.py", line 608, in run_forever
+    self._run_once()
+  File "C:\Python311\Lib\asyncio\base_events.py", line 1936, in _run_once
+    handle._run()
+  File "C:\Python311\Lib\asyncio\events.py", line 84, in _run
+    self._context.run(self._callback, *self._args)
+  File "C:\Python311\Lib\site-packages\discord\app_commands\tree.py", line 1138, in wrapper
+    await self._call(interaction)
+  File "C:\Python311\Lib\site-packages\discord\app_commands\tree.py", line 1302, in _call
+    await command._invoke_with_namespace(interaction, namespace)
+  File "C:\Python311\Lib\site-packages\discord\app_commands\commands.py", line 884, in _invoke_with_namespace
+    return await self._do_call(interaction, transformed_values)
+  File "C:\Python311\Lib\site-packages\discord\app_commands\commands.py", line 859, in _do_call
+    return await self._callback(interaction, **params)  # type: ignore
+  File "C:\Users\ryanm\Documents\mlb_pipeline\discord_bot.py", line 156, in runpipeline_cmd
+    mlb_ingest.run(today, fetch_live=True)
+  File "C:\Users\ryanm\Documents\mlb_pipeline\ingestion\mlb_ingest.py", line 126, in run
+    fetch_player_stats_bulk(season, team_ids)   # ← pass team_ids here
+  File "C:\Users\ryanm\Documents\mlb_pipeline\ingestion\mlb_ingest.py", line 101, in fetch_player_stats_bulk
+    data = get("/api/v1/stats", params={
+  File "C:\Users\ryanm\Documents\mlb_pipeline\ingestion\mlb_ingest.py", line 33, in get
+    time.sleep(RATE_LIMIT)
+
+2026-06-06 09:52:57,853  WARNING   Shard ID None heartbeat blocked for more than 10 seconds.
+Loop thread traceback (most recent call last):
+  File "C:\Users\ryanm\Documents\mlb_pipeline\discord_bot.py", line 616, in <module>
+    bot.run(TOKEN)
+  File "C:\Python311\Lib\site-packages\discord\client.py", line 933, in run
+    asyncio.run(runner())
+  File "C:\Python311\Lib\asyncio\runners.py", line 190, in run
+    return runner.run(main)
+  File "C:\Python311\Lib\asyncio\runners.py", line 118, in run
+    return self._loop.run_until_complete(task)
+  File "C:\Python311\Lib\asyncio\base_events.py", line 641, in run_until_complete
+    self.run_forever()
+  File "C:\Python311\Lib\asyncio\windows_events.py", line 321, in run_forever
+    super().run_forever()
+  File "C:\Python311\Lib\asyncio\base_events.py", line 608, in run_forever
+    self._run_once()
+  File "C:\Python311\Lib\asyncio\base_events.py", line 1936, in _run_once
+    handle._run()
+  File "C:\Python311\Lib\asyncio\events.py", line 84, in _run
+    self._context.run(self._callback, *self._args)
+  File "C:\Python311\Lib\site-packages\discord\app_commands\tree.py", line 1138, in wrapper
+    await self._call(interaction)
+  File "C:\Python311\Lib\site-packages\discord\app_commands\tree.py", line 1302, in _call
+    await command._invoke_with_namespace(interaction, namespace)
+  File "C:\Python311\Lib\site-packages\discord\app_commands\commands.py", line 884, in _invoke_with_namespace
+    return await self._do_call(interaction, transformed_values)
+  File "C:\Python311\Lib\site-packages\discord\app_commands\commands.py", line 859, in _do_call
+    return await self._callback(interaction, **params)  # type: ignore
+  File "C:\Users\ryanm\Documents\mlb_pipeline\discord_bot.py", line 156, in runpipeline_cmd
+    mlb_ingest.run(today, fetch_live=True)
+  File "C:\Users\ryanm\Documents\mlb_pipeline\ingestion\mlb_ingest.py", line 126, in run
+    fetch_player_stats_bulk(season, team_ids)   # ← pass team_ids here
+  File "C:\Users\ryanm\Documents\mlb_pipeline\ingestion\mlb_ingest.py", line 101, in fetch_player_stats_bulk
+    data = get("/api/v1/stats", params={
+  File "C:\Users\ryanm\Documents\mlb_pipeline\ingestion\mlb_ingest.py", line 33, in get
+    time.sleep(RATE_LIMIT)
+
+2026-06-06 09:53:03,861  INFO      Saved → player_stats/player_hitting_2026.json
+[2026-06-06 09:53:07] [WARNING ] discord.gateway: Shard ID None heartbeat blocked for more than 20 seconds.
+Loop thread traceback (most recent call last):
+  File "C:\Users\ryanm\Documents\mlb_pipeline\discord_bot.py", line 616, in <module>
+    bot.run(TOKEN)
+  File "C:\Python311\Lib\site-packages\discord\client.py", line 933, in run
+    asyncio.run(runner())
+  File "C:\Python311\Lib\asyncio\runners.py", line 190, in run
+    return runner.run(main)
+  File "C:\Python311\Lib\asyncio\runners.py", line 118, in run
+    return self._loop.run_until_complete(task)
+  File "C:\Python311\Lib\asyncio\base_events.py", line 641, in run_until_complete
+    self.run_forever()
+  File "C:\Python311\Lib\asyncio\windows_events.py", line 321, in run_forever
+    super().run_forever()
+  File "C:\Python311\Lib\asyncio\base_events.py", line 608, in run_forever
+    self._run_once()
+  File "C:\Python311\Lib\asyncio\base_events.py", line 1936, in _run_once
+    handle._run()
+  File "C:\Python311\Lib\asyncio\events.py", line 84, in _run
+    self._context.run(self._callback, *self._args)
+  File "C:\Python311\Lib\site-packages\discord\app_commands\tree.py", line 1138, in wrapper
+    await self._call(interaction)
+  File "C:\Python311\Lib\site-packages\discord\app_commands\tree.py", line 1302, in _call
+    await command._invoke_with_namespace(interaction, namespace)
+  File "C:\Python311\Lib\site-packages\discord\app_commands\commands.py", line 884, in _invoke_with_namespace
+    return await self._do_call(interaction, transformed_values)
+  File "C:\Python311\Lib\site-packages\discord\app_commands\commands.py", line 859, in _do_call
+    return await self._callback(interaction, **params)  # type: ignore
+  File "C:\Users\ryanm\Documents\mlb_pipeline\discord_bot.py", line 156, in runpipeline_cmd
+    mlb_ingest.run(today, fetch_live=True)
+  File "C:\Users\ryanm\Documents\mlb_pipeline\ingestion\mlb_ingest.py", line 126, in run
+    fetch_player_stats_bulk(season, team_ids)   # ← pass team_ids here
+  File "C:\Users\ryanm\Documents\mlb_pipeline\ingestion\mlb_ingest.py", line 101, in fetch_player_stats_bulk
+    data = get("/api/v1/stats", params={
+  File "C:\Users\ryanm\Documents\mlb_pipeline\ingestion\mlb_ingest.py", line 33, in get
+    time.sleep(RATE_LIMIT)
+
+2026-06-06 09:53:07,859  WARNING   Shard ID None heartbeat blocked for more than 20 seconds.
+Loop thread traceback (most recent call last):
+  File "C:\Users\ryanm\Documents\mlb_pipeline\discord_bot.py", line 616, in <module>
+    bot.run(TOKEN)
+  File "C:\Python311\Lib\site-packages\discord\client.py", line 933, in run
+    asyncio.run(runner())
+  File "C:\Python311\Lib\asyncio\runners.py", line 190, in run
+    return runner.run(main)
+  File "C:\Python311\Lib\asyncio\runners.py", line 118, in run
+    return self._loop.run_until_complete(task)
+  File "C:\Python311\Lib\asyncio\base_events.py", line 641, in run_until_complete
+    self.run_forever()
+  File "C:\Python311\Lib\asyncio\windows_events.py", line 321, in run_forever
+    super().run_forever()
+  File "C:\Python311\Lib\asyncio\base_events.py", line 608, in run_forever
+    self._run_once()
+  File "C:\Python311\Lib\asyncio\base_events.py", line 1936, in _run_once
+    handle._run()
+  File "C:\Python311\Lib\asyncio\events.py", line 84, in _run
+    self._context.run(self._callback, *self._args)
+  File "C:\Python311\Lib\site-packages\discord\app_commands\tree.py", line 1138, in wrapper
+    await self._call(interaction)
+  File "C:\Python311\Lib\site-packages\discord\app_commands\tree.py", line 1302, in _call
+    await command._invoke_with_namespace(interaction, namespace)
+  File "C:\Python311\Lib\site-packages\discord\app_commands\commands.py", line 884, in _invoke_with_namespace
+    return await self._do_call(interaction, transformed_values)
+  File "C:\Python311\Lib\site-packages\discord\app_commands\commands.py", line 859, in _do_call
+    return await self._callback(interaction, **params)  # type: ignore
+  File "C:\Users\ryanm\Documents\mlb_pipeline\discord_bot.py", line 156, in runpipeline_cmd
+    mlb_ingest.run(today, fetch_live=True)
+  File "C:\Users\ryanm\Documents\mlb_pipeline\ingestion\mlb_ingest.py", line 126, in run
+    fetch_player_stats_bulk(season, team_ids)   # ← pass team_ids here
+  File "C:\Users\ryanm\Documents\mlb_pipeline\ingestion\mlb_ingest.py", line 101, in fetch_player_stats_bulk
+    data = get("/api/v1/stats", params={
+  File "C:\Users\ryanm\Documents\mlb_pipeline\ingestion\mlb_ingest.py", line 33, in get
+    time.sleep(RATE_LIMIT)
+
+[2026-06-06 09:53:17] [WARNING ] discord.gateway: Shard ID None heartbeat blocked for more than 30 seconds.
+Loop thread traceback (most recent call last):
+  File "C:\Users\ryanm\Documents\mlb_pipeline\discord_bot.py", line 616, in <module>
+    bot.run(TOKEN)
+  File "C:\Python311\Lib\site-packages\discord\client.py", line 933, in run
+    asyncio.run(runner())
+  File "C:\Python311\Lib\asyncio\runners.py", line 190, in run
+    return runner.run(main)
+  File "C:\Python311\Lib\asyncio\runners.py", line 118, in run
+    return self._loop.run_until_complete(task)
+  File "C:\Python311\Lib\asyncio\base_events.py", line 641, in run_until_complete
+    self.run_forever()
+  File "C:\Python311\Lib\asyncio\windows_events.py", line 321, in run_forever
+    super().run_forever()
+  File "C:\Python311\Lib\asyncio\base_events.py", line 608, in run_forever
+    self._run_once()
+  File "C:\Python311\Lib\asyncio\base_events.py", line 1936, in _run_once
+    handle._run()
+  File "C:\Python311\Lib\asyncio\events.py", line 84, in _run
+    self._context.run(self._callback, *self._args)
+  File "C:\Python311\Lib\site-packages\discord\app_commands\tree.py", line 1138, in wrapper
+    await self._call(interaction)
+  File "C:\Python311\Lib\site-packages\discord\app_commands\tree.py", line 1302, in _call
+    await command._invoke_with_namespace(interaction, namespace)
+  File "C:\Python311\Lib\site-packages\discord\app_commands\commands.py", line 884, in _invoke_with_namespace
+    return await self._do_call(interaction, transformed_values)
+  File "C:\Python311\Lib\site-packages\discord\app_commands\commands.py", line 859, in _do_call
+    return await self._callback(interaction, **params)  # type: ignore
+  File "C:\Users\ryanm\Documents\mlb_pipeline\discord_bot.py", line 156, in runpipeline_cmd
+    mlb_ingest.run(today, fetch_live=True)
+  File "C:\Users\ryanm\Documents\mlb_pipeline\ingestion\mlb_ingest.py", line 126, in run
+    fetch_player_stats_bulk(season, team_ids)   # ← pass team_ids here
+  File "C:\Users\ryanm\Documents\mlb_pipeline\ingestion\mlb_ingest.py", line 101, in fetch_player_stats_bulk
+    data = get("/api/v1/stats", params={
+  File "C:\Users\ryanm\Documents\mlb_pipeline\ingestion\mlb_ingest.py", line 33, in get
+    time.sleep(RATE_LIMIT)
+
+2026-06-06 09:53:17,871  WARNING   Shard ID None heartbeat blocked for more than 30 seconds.
+Loop thread traceback (most recent call last):
+  File "C:\Users\ryanm\Documents\mlb_pipeline\discord_bot.py", line 616, in <module>
+    bot.run(TOKEN)
+  File "C:\Python311\Lib\site-packages\discord\client.py", line 933, in run
+    asyncio.run(runner())
+  File "C:\Python311\Lib\asyncio\runners.py", line 190, in run
+    return runner.run(main)
+  File "C:\Python311\Lib\asyncio\runners.py", line 118, in run
+    return self._loop.run_until_complete(task)
+  File "C:\Python311\Lib\asyncio\base_events.py", line 641, in run_until_complete
+    self.run_forever()
+  File "C:\Python311\Lib\asyncio\windows_events.py", line 321, in run_forever
+    super().run_forever()
+  File "C:\Python311\Lib\asyncio\base_events.py", line 608, in run_forever
+    self._run_once()
+  File "C:\Python311\Lib\asyncio\base_events.py", line 1936, in _run_once
+    handle._run()
+  File "C:\Python311\Lib\asyncio\events.py", line 84, in _run
+    self._context.run(self._callback, *self._args)
+  File "C:\Python311\Lib\site-packages\discord\app_commands\tree.py", line 1138, in wrapper
+    await self._call(interaction)
+  File "C:\Python311\Lib\site-packages\discord\app_commands\tree.py", line 1302, in _call
+    await command._invoke_with_namespace(interaction, namespace)
+  File "C:\Python311\Lib\site-packages\discord\app_commands\commands.py", line 884, in _invoke_with_namespace
+    return await self._do_call(interaction, transformed_values)
+  File "C:\Python311\Lib\site-packages\discord\app_commands\commands.py", line 859, in _do_call
+    return await self._callback(interaction, **params)  # type: ignore
+  File "C:\Users\ryanm\Documents\mlb_pipeline\discord_bot.py", line 156, in runpipeline_cmd
+    mlb_ingest.run(today, fetch_live=True)
+  File "C:\Users\ryanm\Documents\mlb_pipeline\ingestion\mlb_ingest.py", line 126, in run
+    fetch_player_stats_bulk(season, team_ids)   # ← pass team_ids here
+  File "C:\Users\ryanm\Documents\mlb_pipeline\ingestion\mlb_ingest.py", line 101, in fetch_player_stats_bulk
+    data = get("/api/v1/stats", params={
+  File "C:\Users\ryanm\Documents\mlb_pipeline\ingestion\mlb_ingest.py", line 33, in get
+    time.sleep(RATE_LIMIT)
+
+2026-06-06 09:53:20,592  INFO      Saved → player_stats/player_pitching_2026.json
+2026-06-06 09:53:20,944  INFO      Saved → schedule/schedule_2026-06-06.json
+2026-06-06 09:53:20,945  INFO      Schedule: 15 game(s) on 2026-06-06
+2026-06-06 09:53:21,229  INFO      Saved → game_feeds/game_824269.json
+2026-06-06 09:53:21,513  INFO      Saved → game_feeds/game_823697.json
+2026-06-06 09:53:21,794  INFO      Saved → game_feeds/game_823048.json
+2026-06-06 09:53:22,078  INFO      Saved → game_feeds/game_824669.json
+2026-06-06 09:53:22,360  INFO      Saved → game_feeds/game_822808.json
+2026-06-06 09:53:22,641  INFO      Saved → game_feeds/game_823454.json
+2026-06-06 09:53:22,930  INFO      Saved → game_feeds/game_825075.json
+2026-06-06 09:53:23,218  INFO      Saved → game_feeds/game_824184.json
+2026-06-06 09:53:23,511  INFO      Saved → game_feeds/game_824915.json
+2026-06-06 09:53:23,796  INFO      Saved → game_feeds/game_823859.json
+2026-06-06 09:53:24,081  INFO      Saved → game_feeds/game_822891.json
+2026-06-06 09:53:24,363  INFO      Saved → game_feeds/game_823539.json
+2026-06-06 09:53:24,650  INFO      Saved → game_feeds/game_824351.json
+2026-06-06 09:53:24,935  INFO      Saved → game_feeds/game_823942.json
+2026-06-06 09:53:25,220  INFO      Saved → game_feeds/game_823292.json
+2026-06-06 09:53:25,222  INFO      === Ingestion complete ===
+2026-06-06 09:53:25,229  INFO      Wrote dim_teams.csv  (30 rows × 12 cols)
+2026-06-06 09:53:25,316  INFO      Wrote fact_games.csv  (893 rows × 21 cols)
+2026-06-06 09:53:25,378  INFO      Wrote fact_linescore.csv  (7971 rows × 6 cols)
+2026-06-06 09:53:25,385  INFO      Wrote fact_team_stats.csv  (230 rows × 71 cols)
+2026-06-06 09:53:25,423  INFO      Wrote fact_player_stats.csv  (1273 rows × 74 cols)
+2026-06-06 09:53:25,427  INFO      Wrote fact_standings.csv  (30 rows × 17 cols)
+[2026-06-06 09:53:27] [WARNING ] discord.gateway: Shard ID None heartbeat blocked for more than 40 seconds.
+Loop thread traceback (most recent call last):
+  File "C:\Users\ryanm\Documents\mlb_pipeline\discord_bot.py", line 616, in <module>
+    bot.run(TOKEN)
+  File "C:\Python311\Lib\site-packages\discord\client.py", line 933, in run
+    asyncio.run(runner())
+  File "C:\Python311\Lib\asyncio\runners.py", line 190, in run
+    return runner.run(main)
+  File "C:\Python311\Lib\asyncio\runners.py", line 118, in run
+    return self._loop.run_until_complete(task)
+  File "C:\Python311\Lib\asyncio\base_events.py", line 641, in run_until_complete
+    self.run_forever()
+  File "C:\Python311\Lib\asyncio\windows_events.py", line 321, in run_forever
+    super().run_forever()
+  File "C:\Python311\Lib\asyncio\base_events.py", line 608, in run_forever
+    self._run_once()
+  File "C:\Python311\Lib\asyncio\base_events.py", line 1936, in _run_once
+    handle._run()
+  File "C:\Python311\Lib\asyncio\events.py", line 84, in _run
+    self._context.run(self._callback, *self._args)
+  File "C:\Python311\Lib\site-packages\discord\app_commands\tree.py", line 1138, in wrapper
+    await self._call(interaction)
+  File "C:\Python311\Lib\site-packages\discord\app_commands\tree.py", line 1302, in _call
+    await command._invoke_with_namespace(interaction, namespace)
+  File "C:\Python311\Lib\site-packages\discord\app_commands\commands.py", line 884, in _invoke_with_namespace
+    return await self._do_call(interaction, transformed_values)
+  File "C:\Python311\Lib\site-packages\discord\app_commands\commands.py", line 859, in _do_call
+    return await self._callback(interaction, **params)  # type: ignore
+  File "C:\Users\ryanm\Documents\mlb_pipeline\discord_bot.py", line 159, in runpipeline_cmd
+    normalize.run()
+  File "C:\Users\ryanm\Documents\mlb_pipeline\ingestion\normalize.py", line 235, in run
+    build_fact_batter_pitcher_matchups()
+  File "C:\Users\ryanm\Documents\mlb_pipeline\ingestion\normalize.py", line 146, in build_fact_batter_pitcher_matchups
+    data = load_json(path)
+  File "C:\Users\ryanm\Documents\mlb_pipeline\ingestion\normalize.py", line 20, in load_json
+    with open(path, encoding="utf-8") as f:
+
+2026-06-06 09:53:27,894  WARNING   Shard ID None heartbeat blocked for more than 40 seconds.
+Loop thread traceback (most recent call last):
+  File "C:\Users\ryanm\Documents\mlb_pipeline\discord_bot.py", line 616, in <module>
+    bot.run(TOKEN)
+  File "C:\Python311\Lib\site-packages\discord\client.py", line 933, in run
+    asyncio.run(runner())
+  File "C:\Python311\Lib\asyncio\runners.py", line 190, in run
+    return runner.run(main)
+  File "C:\Python311\Lib\asyncio\runners.py", line 118, in run
+    return self._loop.run_until_complete(task)
+  File "C:\Python311\Lib\asyncio\base_events.py", line 641, in run_until_complete
+    self.run_forever()
+  File "C:\Python311\Lib\asyncio\windows_events.py", line 321, in run_forever
+    super().run_forever()
+  File "C:\Python311\Lib\asyncio\base_events.py", line 608, in run_forever
+    self._run_once()
+  File "C:\Python311\Lib\asyncio\base_events.py", line 1936, in _run_once
+    handle._run()
+  File "C:\Python311\Lib\asyncio\events.py", line 84, in _run
+    self._context.run(self._callback, *self._args)
+  File "C:\Python311\Lib\site-packages\discord\app_commands\tree.py", line 1138, in wrapper
+    await self._call(interaction)
+  File "C:\Python311\Lib\site-packages\discord\app_commands\tree.py", line 1302, in _call
+    await command._invoke_with_namespace(interaction, namespace)
+  File "C:\Python311\Lib\site-packages\discord\app_commands\commands.py", line 884, in _invoke_with_namespace
+    return await self._do_call(interaction, transformed_values)
+  File "C:\Python311\Lib\site-packages\discord\app_commands\commands.py", line 859, in _do_call
+    return await self._callback(interaction, **params)  # type: ignore
+  File "C:\Users\ryanm\Documents\mlb_pipeline\discord_bot.py", line 159, in runpipeline_cmd
+    normalize.run()
+  File "C:\Users\ryanm\Documents\mlb_pipeline\ingestion\normalize.py", line 235, in run
+    build_fact_batter_pitcher_matchups()
+  File "C:\Users\ryanm\Documents\mlb_pipeline\ingestion\normalize.py", line 146, in build_fact_batter_pitcher_matchups
+    data = load_json(path)
+  File "C:\Users\ryanm\Documents\mlb_pipeline\ingestion\normalize.py", line 20, in load_json
+    with open(path, encoding="utf-8") as f:
+
+2026-06-06 09:53:36,231  INFO      Wrote fact_batter_pitcher_matchups.csv  (66482 rows × 11 cols)
+2026-06-06 09:53:36,315  INFO      Wrote fact_batter_game_logs.csv  (17810 rows × 7 cols)
+2026-06-06 09:53:36,377  INFO      Wrote fact_pitcher_game_logs.csv  (7365 rows × 6 cols)
+2026-06-06 09:53:36,378  INFO      === Normalization complete ===
+[2026-06-06 09:53:36] [INFO    ] discord.gateway: Shard ID None has successfully RESUMED session cd626da133c4e31ee22474f11314a20f.
+2026-06-06 09:53:36,530  INFO      Shard ID None has successfully RESUMED session cd626da133c4e31ee22474f11314a20f.
+Traceback (most recent call last):
+  File "C:\Users\ryanm\Documents\mlb_pipeline\discord_bot.py", line 162, in runpipeline_cmd
+    wp.train()
+TypeError: train() missing 1 required positional argument: 'features'

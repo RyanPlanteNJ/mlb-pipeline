@@ -1,0 +1,132 @@
+import pandas as pd
+import numpy as np
+from pathlib import Path
+from datetime import date
+
+BASE = Path(__file__).parent.parent / "data" / "normalized"
+
+
+def implied_moneyline(prob):
+    if prob <= 0:
+        return 500
+    if prob >= 1:
+        return -500
+    if prob > 0.5:
+        return -100 * prob / (1 - prob)
+    else:
+        return 100 * (1 - prob) / prob
+
+
+def round_half(x):
+    return np.round(x * 2) / 2
+
+
+def confidence_label(p):
+    if p >= 0.70:
+        return "HIGH"
+    if p >= 0.60:
+        return "MEDIUM"
+    if p >= 0.52:
+        return "LEAN"
+    return "LOW"
+
+
+def run():
+    games = pd.read_csv(BASE / "fact_games.csv",encoding="utf-8", encoding_errors="ignore")
+    wp = pd.read_csv(BASE / "fact_win_probability.csv",encoding="utf-8", encoding_errors="ignore")
+    team_stats = pd.read_csv(BASE / "fact_team_stats.csv",encoding="utf-8", encoding_errors="ignore")
+
+    games["game_date"] = pd.to_datetime(games["game_date"], errors="coerce").dt.date
+    wp["game_date"] = pd.to_datetime(wp["game_date"], errors="coerce").dt.date
+
+    today = date.today()
+
+    games_today = games[games["game_date"] == today]
+    wp_today = wp[wp["game_date"] == today]
+
+    if games_today.empty or wp_today.empty:
+        print("No games found for today. Team props not generated.")
+        return
+
+    if "runsPerGame" not in team_stats.columns:
+        team_stats["runsPerGame"] = team_stats["runs"] / team_stats["gamesPlayed"]
+
+    league_rpg = team_stats["runsPerGame"].mean()
+
+    merged = games_today.merge(
+        wp_today[["game_pk", "home_win_prob", "away_win_prob", "predicted_winner"]],
+        on="game_pk",
+        how="left",
+    )
+
+    merged = merged.merge(
+        team_stats[["team_id", "runsPerGame"]],
+        left_on="home_team_id",
+        right_on="team_id",
+        how="left",
+    ).rename(columns={"runsPerGame": "home_rpg"}).drop(columns=["team_id"])
+
+    merged = merged.merge(
+        team_stats[["team_id", "runsPerGame"]],
+        left_on="away_team_id",
+        right_on="team_id",
+        how="left",
+    ).rename(columns={"runsPerGame": "away_rpg"}).drop(columns=["team_id"])
+
+    merged["home_rpg"] = merged["home_rpg"].fillna(league_rpg)
+    merged["away_rpg"] = merged["away_rpg"].fillna(league_rpg)
+
+    # Simple asymmetric model: home gets a bump, away gets a slight penalty
+    HFA = 0.20
+    merged["home_expected_runs"] = merged["home_rpg"] * 1.05 + HFA
+    merged["away_expected_runs"] = merged["away_rpg"] * 0.95
+
+    merged["home_team_total_runs_line"] = merged["home_expected_runs"].apply(round_half)
+    merged["away_team_total_runs_line"] = merged["away_expected_runs"].apply(round_half)
+
+    merged["game_total_runs_line"] = (
+        merged["home_expected_runs"] + merged["away_expected_runs"]
+    ).apply(round_half)
+
+    merged["home_team_moneyline"] = (
+        merged["home_win_prob"].apply(implied_moneyline).round().astype(int)
+    )
+    merged["away_team_moneyline"] = (
+        merged["away_win_prob"].apply(implied_moneyline).round().astype(int)
+    )
+
+    merged["home_confidence"] = merged["home_win_prob"].apply(confidence_label)
+    merged["away_confidence"] = merged["away_win_prob"].apply(confidence_label)
+
+    merged["home_ev_vs_coinflip"] = merged["home_win_prob"] - 0.5
+    merged["away_ev_vs_coinflip"] = merged["away_win_prob"] - 0.5
+
+    out = merged[
+        [
+            "game_pk",
+            "game_date",
+            "home_team_name",
+            "away_team_name",
+            "home_team_total_runs_line",
+            "away_team_total_runs_line",
+            "game_total_runs_line",
+            "home_team_moneyline",
+            "away_team_moneyline",
+            "home_win_prob",
+            "away_win_prob",
+            "home_confidence",
+            "away_confidence",
+            "home_ev_vs_coinflip",
+            "away_ev_vs_coinflip",
+            "predicted_winner",
+        ]
+    ]
+
+    out = out.groupby("game_pk").first().reset_index()
+
+    out.to_csv(BASE / "fact_team_props.csv", index=False)
+    print("Saved → fact_team_props.csv")
+
+
+if __name__ == "__main__":
+    run()

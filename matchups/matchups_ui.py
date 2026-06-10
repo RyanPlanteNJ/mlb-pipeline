@@ -1,0 +1,387 @@
+import discord
+import pandas as pd
+from .matchups_helpers import (
+    aggregate_game_matchups,
+    build_top20_embeds,
+    build_danger_score_for_game,
+)
+
+# You already have this in discord_bot.py; we just reference it.
+# from discord_bot import Paginator, team_color, team_logo
+
+
+class JumpToGamesButton(discord.ui.Button):
+    def __init__(self, mdf, wp_today, games, user_id, paginator_cls, team_color_fn, team_logo_fn):
+        super().__init__(label="Jump to Game Selector", style=discord.ButtonStyle.primary)
+        self.mdf = mdf
+        self.wp_today = wp_today
+        self.games = games
+        self.user_id = user_id
+        self.Paginator = paginator_cls
+        self.team_color = team_color_fn
+        self.team_logo = team_logo_fn
+
+
+    async def callback(self, interaction):
+        if interaction.user.id != self.user_id:
+            await interaction.response.defer()
+            return
+
+        selector_view = GameSelectView(
+            self.games,
+            self.mdf,
+            self.wp_today,
+            self.user_id,
+            paginator_cls=self.Paginator,
+            team_color_fn=self.team_color,
+            team_logo_fn=self.team_logo
+        )
+
+        await interaction.response.edit_message(
+            content="Select a game:",
+            embed=None,
+            view=selector_view
+        )
+
+
+class BackToTop20Button(discord.ui.Button):
+    def __init__(self, mdf, wp_today, games, user_id, paginator_cls, team_color_fn, team_logo_fn):
+        super().__init__(label="Back to Top 20", style=discord.ButtonStyle.secondary)
+        self.mdf = mdf
+        self.wp_today = wp_today
+        self.games = games
+        self.user_id = user_id
+        self.Paginator = paginator_cls
+        self.team_color = team_color_fn
+        self.team_logo = team_logo_fn
+
+    async def callback(self, interaction):
+        if interaction.user.id != self.user_id:
+            await interaction.response.defer()
+            return
+
+        embeds, labels = build_top20_embeds(self.mdf, discord)
+        paginator = self.Paginator(embeds, labels=labels, user_id=self.user_id)
+        paginator.add_item(
+            JumpToGamesButton(self.mdf, self.wp_today, self.games, self.user_id, self.Paginator, self.team_color, self.team_logo)
+        )
+
+        await interaction.response.edit_message(
+            content="Top 20 Danger‑Score Matchups",
+            embed=embeds[0],
+            view=paginator
+        )
+
+
+class BackToGameSelectorButton(discord.ui.Button):
+    def __init__(self, mdf, wp_today, games, user_id, paginator_cls, team_color_fn, team_logo_fn):
+        super().__init__(label="Back to Game Selector", style=discord.ButtonStyle.secondary)
+        self.mdf = mdf
+        self.wp_today = wp_today
+        self.games = games
+        self.user_id = user_id
+        self.Paginator = paginator_cls
+        self.team_color = team_color_fn
+        self.team_logo = team_logo_fn
+
+    async def callback(self, interaction):
+        if interaction.user.id != self.user_id:
+            await interaction.response.defer()
+            return
+
+        selector_view = GameSelectView(
+            self.games,
+            self.mdf,
+            self.wp_today,
+            self.user_id,
+            paginator_cls=self.Paginator,
+            team_color_fn=self.team_color,
+            team_logo_fn=self.team_logo
+        )
+
+        await interaction.response.edit_message(
+            content="Select a game:",
+            embed=None,
+            view=selector_view
+        )
+
+
+
+class RefreshMatchupsButton(discord.ui.Button):
+    def __init__(self, game_pk, mdf, wp_today, games, user_id, paginator_cls, team_color_fn, team_logo_fn):
+        super().__init__(label="Refresh Matchups", style=discord.ButtonStyle.success)
+        self.game_pk = game_pk
+        self.mdf = mdf
+        self.wp_today = wp_today
+        self.games = games
+        self.user_id = user_id
+        self.Paginator = paginator_cls
+        self.team_color = team_color_fn
+        self.team_logo = team_logo_fn
+
+    async def callback(self, interaction):
+        if interaction.user.id != self.user_id:
+            await interaction.response.defer()
+            return
+
+        if self.game_pk is None:
+            selector_view = GameSelectView(self.games, self.mdf, self.wp_today, self.user_id)
+            await interaction.response.edit_message(
+                content="Select a game:",
+                embed=None,
+                view=selector_view
+            )
+            return
+
+        view = GameSelectView(
+            self.games,
+            self.mdf,
+            self.wp_today,
+            self.user_id,
+            paginator_cls=self.Paginator,
+            team_color_fn=self.team_color,
+            team_logo_fn=self.team_logo
+        )
+
+        embeds, labels = view.build_game_embeds(
+            self.game_pk, self.team_color, self.team_logo
+        )
+
+        paginator = self.Paginator(embeds, labels=labels, user_id=self.user_id)
+        paginator.add_item(
+            BackToTop20Button(self.mdf, self.wp_today, self.games, self.user_id, self.Paginator, self.team_color, self.team_logo)
+        )
+        paginator.add_item(
+            BackToGameSelectorButton(self.mdf, self.wp_today, self.games, self.user_id, self.Paginator, self.team_color, self.team_logo)
+        )
+        paginator.add_item(
+            RefreshMatchupsButton(self.game_pk, self.mdf, self.wp_today, self.games, self.user_id, self.Paginator, self.team_color, self.team_logo)
+        )
+        paginator.add_item(
+            DangerScoreButton(self.game_pk, self.mdf, self.wp_today, self.games, self.user_id, self.team_color, self.team_logo)
+        )
+
+        await interaction.response.edit_message(
+            content=f"Matchups for {labels[0].split(' (')[0]}",
+            embed=embeds[0],
+            view=paginator
+        )
+
+
+class DangerScoreButton(discord.ui.Button):
+    def __init__(self, game_pk, mdf, wp_today, games, user_id, team_color_fn, team_logo_fn):
+        super().__init__(label="Danger Score (This Game Only)", style=discord.ButtonStyle.danger)
+        self.game_pk = game_pk
+        self.mdf = mdf
+        self.wp_today = wp_today
+        self.games = games
+        self.user_id = user_id
+        self.team_color = team_color_fn
+        self.team_logo = team_logo_fn
+
+    async def callback(self, interaction):
+        if interaction.user.id != self.user_id:
+            await interaction.response.defer()
+            return
+
+        game_group = self.mdf[self.mdf["game_pk"] == self.game_pk]
+        embed = build_danger_score_for_game(game_group, discord)
+
+        home = game_group["home_team_name"].iloc[0]
+        away = game_group["away_team_name"].iloc[0]
+
+        view = GameSelectView(self.games, self.mdf, self.wp_today, self.user_id, None, self.team_color, self.team_logo)
+        view.add_item(
+            BackToTop20Button(self.mdf, self.wp_today, self.games, self.user_id, None, self.team_color, self.team_logo)
+        )
+        view.add_item(
+            BackToGameSelectorButton(self.mdf, self.wp_today, self.games, self.user_id, None, self.team_color, self.team_logo)
+        )
+
+        await interaction.response.edit_message(
+            content=f"Danger Score — {away} @ {home}",
+            embed=embed,
+            view=view
+        )
+
+
+class GameSelect(discord.ui.Select):
+    def __init__(self, games):
+        options = [
+            discord.SelectOption(
+                label=f"{away} @ {home}",
+                value=str(game_pk)
+            )
+            for game_pk, home, away in games
+        ]
+
+        super().__init__(
+            placeholder="Select a game…",
+            min_values=1,
+            max_values=1,
+            options=options
+        )
+
+    async def callback(self, interaction):
+        view: GameSelectView = self.view  # type: ignore
+        game_pk = int(self.values[0])
+
+        embeds, labels = view.build_game_embeds(
+            game_pk, view.team_color, view.team_logo
+        )
+
+        paginator = view.Paginator(embeds, labels=labels, user_id=view.user_id)
+        if not embeds or not labels:
+            error_embed = discord.Embed(
+                title="Matchups unavailable",
+                description="Unable to build matchups for the selected game.",
+                color=0xFF0000,
+            )
+            await interaction.response.edit_message(
+                content="Matchups unavailable",
+                embed=error_embed,
+                view=paginator,
+            )
+            return
+        paginator.add_item(
+            BackToTop20Button(view.mdf, view.wp_today, view.games, view.user_id, view.Paginator, view.team_color, view.team_logo)
+        )
+        paginator.add_item(
+            BackToGameSelectorButton(view.mdf, view.wp_today, view.games, view.user_id, view.Paginator, view.team_color, view.team_logo)
+        )
+        paginator.add_item(
+            RefreshMatchupsButton(game_pk, view.mdf, view.wp_today, view.games, view.user_id, view.Paginator, view.team_color, view.team_logo)
+        )
+        paginator.add_item(
+            DangerScoreButton(game_pk, view.mdf, view.wp_today, view.games, view.user_id, view.team_color, view.team_logo)
+        )
+
+        await interaction.response.edit_message(
+            content=f"Matchups for {labels[0].split(' (')[0]}",
+            embed=embeds[0],
+            view=paginator
+        )
+
+
+class GameSelectView(discord.ui.View):
+    def __init__(self, games, mdf, wp_today, user_id, paginator_cls=None, team_color_fn=None, team_logo_fn=None):
+        super().__init__(timeout=300)
+        self.mdf = mdf
+        self.wp_today = wp_today
+        self.games = games
+        self.user_id = user_id
+        self.Paginator = paginator_cls
+        self.team_color = team_color_fn
+        self.team_logo = team_logo_fn
+
+        self.add_item(GameSelect(games))
+
+    def build_game_embeds(self, game_pk, team_color_fn, team_logo_fn):
+        game_group = self.mdf[self.mdf["game_pk"] == game_pk]
+
+        if game_group.empty:
+            embed = discord.Embed(
+                title="No Matchups Available",
+                description="This game has no batter vs pitcher matchups yet.",
+                color=0xFF0000,
+            )
+            return [embed], ["No Matchups"]
+
+        home = game_group["home_team_name"].iloc[0]
+        away = game_group["away_team_name"].iloc[0]
+        game_date = game_group["game_date"].iloc[0]
+
+        if game_pk in self.wp_today.index:
+            pred = self.wp_today.loc[game_pk, "predicted_winner"]
+            color = team_color_fn(pred)
+            logo = team_logo_fn(pred)
+        else:
+            pred = home
+            color = team_color_fn(home)
+            logo = team_logo_fn(home)
+
+        agg = aggregate_game_matchups(game_group)
+
+        # Group matchups by team (away team vs home pitcher, home team vs away pitcher)
+        # Use team_name if available, otherwise use home_team_name/away_team_name to determine team
+        if "team_id" in game_group.columns:
+            away_team_id = game_group["away_team_id"].iloc[0]
+            home_team_id = game_group["home_team_id"].iloc[0]
+            away_matchups = agg[agg["batter_name"].isin(game_group[game_group["team_id"] == away_team_id]["batter_name"])]
+            home_matchups = agg[agg["batter_name"].isin(game_group[game_group["team_id"] == home_team_id]["batter_name"])]
+        else:
+            # Fallback: group by pitcher (away batters face home pitcher, home batters face away pitcher)
+            home_pitcher = game_group[game_group["home_team_name"] == home]["pitcher_name"].iloc[0] if not game_group[game_group["home_team_name"] == home].empty else None
+            away_pitcher = game_group[game_group["away_team_name"] == away]["pitcher_name"].iloc[0] if not game_group[game_group["away_team_name"] == away].empty else None
+            
+            if home_pitcher:
+                away_matchups = agg[agg["pitcher_name"] == home_pitcher]
+            else:
+                away_matchups = pd.DataFrame()
+            
+            if away_pitcher and away_pitcher != home_pitcher:
+                home_matchups = agg[agg["pitcher_name"] == away_pitcher]
+            else:
+                home_matchups = pd.DataFrame()
+
+        lines = []
+        
+        # Away team matchups
+        if not away_matchups.empty:
+            lines.append(f"**{away} Batters:**")
+            for _, r in away_matchups.iterrows():
+                batter = r["batter_name"]
+                pitcher = r["pitcher_name"]
+                hits = f"{r['hit_prob'] * 100:.1f}%"
+                hrs = f"{r['hr_prob'] * 100:.1f}%"
+                sos = f"{r['k_prob'] * 100:.1f}%"
+                multi = f"{r['multi_prob'] * 100:.1f}%"
+                line = f"🧢 **{batter}** vs {pitcher} — H: {hits} | HR: {hrs} | SO: {sos} | M: {multi}"
+                lines.append(line)
+            lines.append("")  # Empty line for separation
+        
+        # Home team matchups
+        if not home_matchups.empty:
+            lines.append(f"**{home} Batters:**")
+            for _, r in home_matchups.iterrows():
+                batter = r["batter_name"]
+                pitcher = r["pitcher_name"]
+                hits = f"{r['hit_prob'] * 100:.1f}%"
+                hrs = f"{r['hr_prob'] * 100:.1f}%"
+                sos = f"{r['k_prob'] * 100:.1f}%"
+                multi = f"{r['multi_prob'] * 100:.1f}%"
+                line = f"🧢 **{batter}** vs {pitcher} — H: {hits} | HR: {hrs} | SO: {sos} | M: {multi}"
+                lines.append(line)
+
+        CHUNK = 10
+        embeds = []
+        labels = []
+
+        if not lines:
+            embed = discord.Embed(
+                title=f"{away} @ {home} — Matchups",
+                description="No matchups found for this game.",
+                color=0xFF0000,
+            )
+            embed.set_footer(text=f"Date: {game_date} | Predicted Winner: {pred}")
+            return [embed], [f"{away} @ {home}"]
+
+        for i in range(0, len(lines), CHUNK):
+            chunk = lines[i:i+CHUNK]
+            desc = "\n".join(chunk)
+
+            embed = discord.Embed(
+                title=f"{away} @ {home} — Matchups",
+                description=desc,
+                color=color,
+            )
+
+            if logo:
+                embed.set_thumbnail(url=logo)
+
+            embed.set_footer(text=f"Date: {game_date} | Predicted Winner: {pred}")
+
+            embeds.append(embed)
+            labels.append(f"{away} @ {home} (part {i//CHUNK + 1})")
+
+        return embeds, labels
